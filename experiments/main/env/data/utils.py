@@ -9,32 +9,32 @@ np.random.seed(SEED)
 
 # %%
 def step(drone: Drone, tasks: np.ndarray[Task]) -> float:
-    beta = tasks.size
-    if beta == 0: return 0
-
-    tasks = legal_tasks(drone=drone, tasks=tasks)
+    pld_limit = payload_limit(drone=drone, tasks=tasks) # [0, 1]
+    if pld_limit < 3/4:
+        return 0
     
-    beta = tasks.size / beta
-    if beta == 0: return 0
-
-    pyl_limit = payload_limit(drone=drone, tasks=tasks) # [0, 1]
     tpr_limit = temporal_limit(drone=drone, tasks=tasks) # [0, 1]
-    opm_reward = optimization_reward(drone=drone, tasks=tasks)
-
-    return beta * pyl_limit * tpr_limit * opm_reward
+    if tpr_limit < 1/3:
+        return 0
+    
+    opm_reward = optimization_reward(drone=drone, tasks=tasks) # [0, inf]
+    return opm_reward
 
 # %%
 def payload_limit(drone: Drone, tasks: np.ndarray[Task]) -> float:
     drone_payload = drone.state[-1]
-    tasks_payload = np.array([task.state[-2] for task in tasks]).sum()
-    return np.sqrt(drone_payload >= tasks_payload or max(1 - (tasks_payload - drone_payload) / (drone_payload + 1e-9), 0))
+    tasks_payload = np.array([task.state[-2] * (1 + (1 - satisfy(drone=drone, task=task)) * 1/3)  for task in tasks]).sum() if tasks.size else 0
+    return np.min(1, drone_payload / (tasks_payload + 1e-9))
+
+def satisfy(drone: Drone, task: Task) -> bool:
+    return (drone.state[:3] & task.state[:3]).any()
 
 # %%
 def temporal_limit(drone: Drone, tasks: np.ndarray[Task]) -> float:
-    tasks_last_lifetime = np.array([task.state[-1] for task in tasks])
+    tasks_last_lifetime = np.array([task.state[-1] * (1 + (1 - satisfy(drone=drone, task=task)) * 1/3) for task in tasks])
     tasks_last_lifetime.sort()
     gamma = tasks_last_lifetime / (tasks_last_lifetime.cumsum() + 1e-9)
-    return np.sqrt(gamma.min())
+    return gamma.min()
 
 # %%
 def optimization_reward(drone: Drone, tasks: np.ndarray[Task]) -> float:
@@ -43,8 +43,7 @@ def optimization_reward(drone: Drone, tasks: np.ndarray[Task]) -> float:
     """
     pyl_reward = payload_reward(drone=drone, tasks=tasks)
     tmp_reward = temporal_reward(drone=drone, tasks=tasks)
-
-    return pyl_reward + tmp_reward
+    return pyl_reward * tmp_reward
 
 # %%
 def payload_reward(drone: Drone, tasks: np.ndarray[Task]) -> float:
