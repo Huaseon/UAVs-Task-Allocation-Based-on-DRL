@@ -1,0 +1,8 @@
+{
+  "episodes_per_tial": 6000,
+  "exploration_rate_min": 1,
+  "gamma": 0.9786244445888024,
+  "lr": 1.3464494236405352e-06,
+  "max_times": 1,
+  "sync_every_rate": 0.021234922733970287
+}
